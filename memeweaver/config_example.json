@@ -1,0 +1,16 @@
+{
+    "token": "token from bot section of discord api site",
+    "playing": "with bugs",
+    "memeStoragePath": "./cache",
+	"memeCacheLimit": 3,
+	"logging": {
+		"PathFormat": "logs/log-{Date}.txt",
+		"LogLevel": {
+			"Default": "Debug",
+			"Microsoft": "Information"
+		}
+	},
+	"ConnectionStrings": {
+		"MemeweaverDatabase": "server=localhost;port=3306;database=memeweaver;user=memeweaver;password=asdf"
+	}
+}

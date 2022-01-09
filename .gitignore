@@ -1,0 +1,11 @@
+
+**/bin/**
+**/obj/**
+*.opus
+*.mp3
+*.webm
+*.wav
+
+memeweaver/config.json
+memeweaver/cache/**
+memeweaver/logs/**
