@@ -5,35 +5,16 @@
    "version": "0.2.0",
    "configurations": [
         {
-            "name": "Tester",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/tester/bin/Debug/net5.0/tester.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/memeweaver",
-            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
-            "console": "internalConsole",
-            "stopAtEntry": false
-        },
-        {
             "name": "Bot",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/memeweaver/bin/Debug/net5.0/memeweaver",
+            "program": "${workspaceFolder}/memeweaver/bin/Debug/net6.0/memeweaver",
             "args": [],
             "cwd": "${workspaceFolder}/memeweaver",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",
             "stopAtEntry": false
-        },
-        {
-            "name": ".NET Core Attach",
-            "type": "coreclr",
-            "request": "attach",
-            "processId": "${command:pickProcess}"
         }
     ]
 }
