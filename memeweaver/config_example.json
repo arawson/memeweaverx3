@@ -1,14 +1,16 @@
 {
     "token": "token from bot section of discord api site",
+	"testGuild": "",
     "playing": "with bugs",
     "memeStoragePath": "./cache",
 	"memeCacheLimit": 3,
 	"logging": {
 		"PathFormat": "logs/log-{Date}.txt",
 		"LogLevel": {
-			"Default": "Debug",
-			"Microsoft": "Information"
-		}
+			"Default": "Trace",
+			"Microsoft": "Trace"
+		},
+		"OutputTemplate": "{Timestamp:o} ({EventId:x8}) {SourceContext,32} [{Level:u3}] {Message} {NewLine}{Exception}"
 	},
 	"ConnectionStrings": {
 		"MemeweaverDatabase": "server=localhost;port=3306;database=memeweaver;user=memeweaver;password=asdf"
