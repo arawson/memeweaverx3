@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Audio;
 using Discord.Interactions;
+using memeweaver.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -41,7 +42,7 @@ namespace memeweaver.modules
         [SlashCommand("add", "Add a meme to the random play pool", false, RunMode.Async)]
         public async Task AddAsync(MWXType type, string target)
         {
-            await Context.Interaction.DeferAsync(true);
+            await Context.Interaction.DeferAsync();
             switch (type)
             {
                 case MWXType.play:
@@ -58,7 +59,7 @@ namespace memeweaver.modules
                 ?? 0;
             if (guildId == 0) {
                 Logger.LogInformation($"Received message from non-server user {Context.User}");
-                await DiscordHelper.ModifyOriginalResponseAsync(Context, "I can't tell what server you ar on. Please contact your server admin.");
+                await Context.Interaction.ModifyOriginalResponseAsync("I can't tell what server you ar on. Please contact your server admin.");
                 return;
             }
 
@@ -67,7 +68,7 @@ namespace memeweaver.modules
                 uri = new Uri(target);
             } catch (InvalidOperationException ex) {
                 Logger.LogError(ex, "Bad URL");
-                await DiscordHelper.ModifyOriginalResponseAsync(Context, "Something's borked with that URL.");
+                await Context.Interaction.ModifyOriginalResponseAsync("Something's borked with that URL.");
                 return;
             }
 
@@ -76,14 +77,14 @@ namespace memeweaver.modules
                 vf = await Queries.GetVideoInformation(uri);
             } catch (Exception ex) {
                 Logger.LogError(ex, "Bad YTDL Lookup");
-                await DiscordHelper.ModifyOriginalResponseAsync(Context, "I couldn't read that URL.");
+                await Context.Interaction.ModifyOriginalResponseAsync("I couldn't read that URL.");
                 return;
             }
 
             // Playable? p = Settings.GetPlayable(uri);
 
             Settings.PutPlayableURI(guildId, uri);
-            await DiscordHelper.ModifyOriginalResponseAsync(Context, "Done.");
+            await Context.Interaction.ModifyOriginalResponseAsync("Done.");
         }
     }
 }

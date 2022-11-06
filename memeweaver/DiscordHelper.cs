@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Discord;
 using Microsoft.Extensions.Logging;
@@ -18,16 +19,5 @@ public static class DiscordHelper
             case LogSeverity.Verbose: level = LogLevel.Trace; break;
         }
         return level;
-    }
-
-    public static async Task ModifyOriginalResponseAsync(
-        IInteractionContext context,
-        string message
-    ) {
-        await context
-            .Interaction
-            .ModifyOriginalResponseAsync(
-                x => x.Content = message
-            );
     }
 }
