@@ -247,7 +247,7 @@ namespace memeweaver.modules
                                     // TODO register the cancellation token so we can skip
                                     skipTok?.Register(() => {
                                         logger.LogInformation($"Skip requested");
-                                        ytdl.CloseMainWindow();
+                                        ytdl.CloseMainWindow(); // on skip (on cached video) no process is associated with the handle
                                         ffmpeg.CloseMainWindow();
                                         in_stage_2.Flush();
                                         in_stage_2.Dispose();
@@ -260,7 +260,7 @@ namespace memeweaver.modules
                                         // the closed file exception
                                         // out_stage_1.Flush();
                                         // out_stage_1.Dispose();
-                                        in_stage_2.Flush();
+                                        in_stage_2.Flush(); // 'Cannot access a closed file is happening here
                                         in_stage_2.Dispose();
                                     };
                                     try {
@@ -275,7 +275,7 @@ namespace memeweaver.modules
                                                 logger.LogCritical($"Stage 1 Audio Failure for guild {guildID}");
                                                 logger.LogCritical(ex.ToString());
                                                 logger.LogCritical(ex.StackTrace);
-                                                // throw;
+                                                throw;
                                             }
                                         };
                                         Func<Task> stage_2 = async () => {
@@ -285,7 +285,7 @@ namespace memeweaver.modules
                                                 logger.LogCritical($"Stage 2 Audio Failure for guild {guildID}");
                                                 logger.LogCritical(ex.ToString());
                                                 logger.LogCritical(ex.StackTrace);
-                                                // throw;
+                                                throw;
                                             }
                                         };
                                         Task.WaitAll(
