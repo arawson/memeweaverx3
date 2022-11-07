@@ -247,9 +247,9 @@ namespace memeweaver.modules
                                     // TODO register the cancellation token so we can skip
                                     skipTok?.Register(() => {
                                         logger.LogInformation($"Skip requested");
-                                        ytdl.CloseMainWindow(); // on skip (on cached video) no process is associated with the handle
+                                        ytdl.CloseMainWindow(); // on skip (on cached audio) no process is associated with the handle
                                         ffmpeg.CloseMainWindow();
-                                        in_stage_2.Flush();
+                                        in_stage_2.Flush(); // on skip (on streaming audio), this causes a failure to be logged and break the playlist
                                         in_stage_2.Dispose();
                                     });
 
