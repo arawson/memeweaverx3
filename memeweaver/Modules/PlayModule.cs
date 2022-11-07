@@ -1,19 +1,19 @@
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Audio;
-using Discord.Commands;
 using Microsoft.Extensions.Logging;
+using Discord.Interactions;
+using memeweaver.Extensions;
 using System.Linq;
 
 #nullable enable
 
 namespace memeweaver.modules
 {
-    public class PlayModule : ModuleBase<SocketCommandContext>
+    public class PlayModule : InteractionModuleBase<SocketInteractionContext>
     {
         private readonly ILogger logger;
         private readonly VoiceClientService voices;
@@ -25,6 +25,7 @@ namespace memeweaver.modules
             NetQueryService queries, PlayableCachingService cache,
             ServerSettingService settings) {
             logger = loggerFactory.CreateLogger("PlayModule");
+
             logger.LogInformation("Module initialized.");
             this.voices = voices;
             this.queries = queries;
@@ -32,85 +33,146 @@ namespace memeweaver.modules
             this.settings = settings;
         }
 
-        [Command("check", RunMode = RunMode.Async)]
-        public async Task CheckAsync(string target) {
-            Uri uriTarget = new Uri(target);
+        [SlashCommand("check", "Get information on a URL to play.", false, RunMode.Async)]
+        public async Task CheckAsync(string url) {
+            // defer because this could be a long operation
+            await Context.Interaction.DeferAsync();
 
-            await queries.GetVideoInformation(uriTarget);
+            Uri uriTarget;
+            try {
+                uriTarget = new Uri(url);
+            
+            
+                if (await queries.GetVideoInformation(uriTarget) == null) {
+                    await Context.Interaction.ModifyOriginalResponseAsync("I probably can't play that.");
+                } else {
+                    await Context.Interaction.ModifyOriginalResponseAsync("I should be able to play that.");
+                }
+            }
+            catch (UriFormatException)
+            {
+                await Context.Interaction.ModifyOriginalResponseAsync("That is not a valid URL.");
+            }
         }
 
-        [Command("stop", RunMode = RunMode.Async)]
+        [SlashCommand("stop", "Stop the currently playing audio in your voice channel.", false, RunMode.Async)]
         public async Task StopAsync() {
-            logger.LogDebug($"Attempting to leave voice channel");
+            logger.LogTrace($"StopAsync");
+            await Context.Interaction.DeferAsync();
 
-            var user = (Context.User as IGuildUser);
+            var audiocheck = await GetAudioJoinInfo();
 
-            if (user == null) {
+            if (audiocheck == null || audiocheck.Item1 == 0) {
                 logger.LogInformation($"Got message from non guild user: {Context.User.Username}");
+                await Context.Interaction.ModifyOriginalResponseAsync("I couldn't get the server you were on. Please contact your server admin.");
                 return;
             }
 
-            var guildID = user.GuildId;
-
-            await voices.CancelStream(guildID);
+            await voices.CancelStream(audiocheck.Item1);
+            await Context.Interaction.ModifyOriginalResponseAsync("Done.");
         }
 
-        [Command("skip", RunMode = RunMode.Async)]
+        [SlashCommand("skip", "Skip the currently playing URL.", false, RunMode.Async)]
         public async Task SkipAsync() {
-            var audioCheck = await CheckAudioJoin();
+            var audioCheck = await GetAudioJoinInfo();
             if (audioCheck == null) return;
             voices.SkipPlay(audioCheck.Item1);
+            await Context.Interaction.RespondAsync("Done.");
         }
 
-        // [Command("play", RunMode = RunMode.Async)]
-        // public async Task PlayAsync() {
-        //     // TODO rando play
-        //     await Context.Message.ReplyAsync("hep");
-        // }
+        [SlashCommand("play", "Queue up a URL to play in voice chat.", false, RunMode.Async)]
+        public async Task PlayAsync(
+            [Summary(description: "Either a URL to play, a set of search tearms, or nothing for pick a registered thing at random.")]
+            string? urlOrSearch = null
+        ) {
+            logger.LogTrace("PlayAsync");
+            await Context.Interaction.DeferAsync();
 
-        [Command("play", RunMode = RunMode.Async)]
-        public async Task PlayAsync(params string[] args) {
+            Uri? targetUri = null;
+            string? searchTerms = null;
+            string currentMessage = "";
+
+            var UpdateStatus = async (string addContent) => {
+                currentMessage += addContent + " ";
+                await Context.Interaction.ModifyOriginalResponseAsync(currentMessage);
+            };
+
             //TODO wrap all this in a transaction
-            string target = string.Join(' ', args);
+            
+            if (!String.IsNullOrEmpty(urlOrSearch)) {
+                try {
+                    targetUri = new Uri(urlOrSearch);
+                    currentMessage += "That is a valid URL. ";
+                    logger.LogTrace("Playing from a valid URI");
+                }
+                catch (UriFormatException) {
+                    logger.LogTrace("Not a valid URI");
+                }
 
-            var audioCheck = await CheckAudioJoin();
-            if (audioCheck == null) throw new InvalidOperationException("NOPE!");
+                if (targetUri == null) {
+                    searchTerms = urlOrSearch;
+                    logger.LogTrace("Playing from search terms");
+                }
+            } else {
+                // else nothing, just random play mode
+                logger.LogTrace("Playing from the guild random list");
+            }
+
+            var audioCheck = await GetAudioJoinInfo();
+            if (audioCheck == null) {
+                logger.LogError($"Unable to join user audio for unknown reason.");
+                await UpdateStatus("You must be in a voice channel for that to work!");
+                return;
+            }
             var guildID = audioCheck.Item1;
             var voiceChannel = audioCheck.Item2;
 
-            Uri? targetUri = null;
-
             // pull in a random one for the server
-            if (String.IsNullOrWhiteSpace(target))
+            if (targetUri == null && searchTerms == null)
             {
                 targetUri = await settings.RandomPlayableForGuild(guildID);
-            }
 
-            if (targetUri == null && !Uri.TryCreate(target, UriKind.Absolute, out targetUri))
-            {
-                try {
-                // fallback to YT search for URI
-                    targetUri = await queries.SearchYoutube(target);
-                } catch (Exception ex) {
-                    logger.LogError(ex, "Failure querying youtube.");
+                if (targetUri == null) {
+                    await UpdateStatus("There aren't any memes added for your server yet. Try my `add` command to get started!");
                     return;
                 }
             }
 
-            if (targetUri == null)
+            if (targetUri == null && searchTerms != null)
             {
-                // TODO should I send a message back?
-                logger.LogError($"No YT search for and no URI possible for {target}");
+                try {
+                    await UpdateStatus("Searching YouTube for that.");
+                    // fallback to YT search for URI
+                    targetUri = await queries.SearchYoutube(searchTerms);
+                } catch (Exception ex) {
+                    logger.LogError(ex, "Failure querying youtube.");
+                    await UpdateStatus("I couldn't search YouTube for that. Please contact the bot admin.");
+                    return;
+                }
+            }
+
+            // targetUri still null means no search results, somehow
+            if (targetUri == null && searchTerms != null)
+            {
+                logger.LogError($"No YT search results for {searchTerms}");
+                await UpdateStatus("I didn't find any results for that on YouTube, traveller. You better find someone that sells weaker search terms!");
                 return;
+            } else {
+                await UpdateStatus($"I found {targetUri} to play.");
             }
 
             // TODO message about already playing
-            if (voices.IsPlayingAndEnqueue(guildID, targetUri)) return;
+            if (voices.IsPlayingAndEnqueue(guildID, targetUri!)) {
+                await UpdateStatus("That has been queued for playback.");
+                return;
+            };
 
             AudioOutStream? stream = null;
             NetQueryService.VidFormat? vidInfo = null;
             CancellationToken? skipTok = null;
 
+            // TODO: are we OK to keep doing stuff in this thread or do we need a worker?
+            // Is responding to the interaction sufficient for Discord to be happy?
             try{
 
                 Uri? uri = null;
@@ -185,9 +247,9 @@ namespace memeweaver.modules
                                     // TODO register the cancellation token so we can skip
                                     skipTok?.Register(() => {
                                         logger.LogInformation($"Skip requested");
-                                        ytdl.CloseMainWindow();
+                                        ytdl.CloseMainWindow(); // on skip (on cached audio) no process is associated with the handle
                                         ffmpeg.CloseMainWindow();
-                                        in_stage_2.Flush();
+                                        in_stage_2.Flush(); // on skip (on streaming audio), this causes a failure to be logged and break the playlist
                                         in_stage_2.Dispose();
                                     });
 
@@ -198,7 +260,7 @@ namespace memeweaver.modules
                                         // the closed file exception
                                         // out_stage_1.Flush();
                                         // out_stage_1.Dispose();
-                                        in_stage_2.Flush();
+                                        in_stage_2.Flush(); // 'Cannot access a closed file is happening here
                                         in_stage_2.Dispose();
                                     };
                                     try {
@@ -213,7 +275,7 @@ namespace memeweaver.modules
                                                 logger.LogCritical($"Stage 1 Audio Failure for guild {guildID}");
                                                 logger.LogCritical(ex.ToString());
                                                 logger.LogCritical(ex.StackTrace);
-                                                // throw;
+                                                throw;
                                             }
                                         };
                                         Func<Task> stage_2 = async () => {
@@ -223,7 +285,7 @@ namespace memeweaver.modules
                                                 logger.LogCritical($"Stage 2 Audio Failure for guild {guildID}");
                                                 logger.LogCritical(ex.ToString());
                                                 logger.LogCritical(ex.StackTrace);
-                                                // throw;
+                                                throw;
                                             }
                                         };
                                         Task.WaitAll(
@@ -260,17 +322,27 @@ namespace memeweaver.modules
             }
         }
 
-        private async Task<Tuple<ulong, IVoiceChannel>?> CheckAudioJoin() {
-            var user = (Context.User as IGuildUser);
+        private async Task<Tuple<ulong, IVoiceChannel>?> GetAudioJoinInfo() {
+            logger.LogTrace("CheckAudioJoin");
 
-            if (user == null) {
+            var guildID = Context.Interaction.GuildId;
+            var user = Context.Interaction.User as IGuildUser;// Context.Guild.GetUser(Context.User.Id) as IGuildUser;
+            var textChannel = await Context.Interaction.GetChannelAsync();
+
+            if (guildID == null)
+            {
+                logger.LogInformation($"Got message from non guild user: {Context.User.Username}");
+                return null;
+            }
+            
+
+            if (user == null || guildID == null) {
                 logger.LogInformation($"Got message from non guild user: {Context.User.Username}");
                 return null;
             }
 
-            logger.LogDebug($"Checking join voice channel of user {user.Username} in guild {user.GuildId}");
+            logger.LogDebug($"Checking join voice channel of user {user.Username} in guild {guildID}");
 
-            var guildID = user.GuildId;
             var voiceChannel = user.VoiceChannel;
 
             // can I get the current user's voice channel?
@@ -278,12 +350,10 @@ namespace memeweaver.modules
             if (me == null) logger.LogInformation("Self is not self user.");
             
             if (voiceChannel == null) {
-                //TODO: figure out how to make error messages replies
-                await Context.Channel.SendMessageAsync("You must be in a voice channel for that to work!");
                 return null;
             }
 
-            return Tuple.Create(guildID, voiceChannel);
+            return Tuple.Create(guildID ?? 0, voiceChannel);
         }
     }
 }
