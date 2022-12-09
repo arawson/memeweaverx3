@@ -9,3 +9,5 @@
 memeweaver/config.json
 memeweaver/cache/**
 memeweaver/logs/**
+
+tmp/**
